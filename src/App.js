@@ -14,8 +14,14 @@ export default function MiniQuizlet() {
   const [quizFinished, setQuizFinished] = useState(false);
   const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
-  const [quizPool, setQuizPool] = useState([]); // Chứa danh sách câu hỏi đã trộn
-  const [quizLimit, setQuizLimit] = useState(0); // Giới hạn số câu hỏi người dùng chọn
+  const [quizPool, setQuizPool] = useState([]); 
+  const [quizLimit, setQuizLimit] = useState(0); 
+
+  // Game State (PHẦN THÊM MỚI)
+  const [gameCards, setGameCards] = useState([]);
+  const [gameActive, setGameActive] = useState(false);
+  const [gameTime, setGameTime] = useState(0);
+  const [firstSelection, setFirstSelection] = useState(null);
 
   // Form State
   const [inputTerm, setInputTerm] = useState("");
@@ -70,15 +76,12 @@ export default function MiniQuizlet() {
   const currentQuizData = useMemo(() => {
     if (quizPool.length === 0 || quizFinished) return null;
     const currentCard = quizPool[currentQuizIndex];
-    
-    // Tạo đáp án nhiễu từ toàn bộ danh sách cards (không chỉ trong pool)
     const otherCards = cards.filter(c => c.id !== currentCard.id);
     const shuffledOthers = [...otherCards].sort(() => 0.5 - Math.random());
     const wrongAnswers = shuffledOthers.slice(0, 3).map(c => c.definition);
     const allAnswers = [...wrongAnswers, currentCard.definition].sort(() => 0.5 - Math.random());
-    
     return { question: currentCard.term, correctAnswer: currentCard.definition, answers: allAnswers };
-  }, [quizPool, currentQuizIndex, quizFinished]);
+  }, [quizPool, currentQuizIndex, quizFinished, cards]);
 
   const handleAnswerClick = (ans) => {
     if (selectedAnswer) return;
@@ -99,6 +102,42 @@ export default function MiniQuizlet() {
     setQuizPool([]); 
     setQuizLimit(0); 
   };
+
+  // Game Match Logic (PHẦN THÊM MỚI)
+  const startMatchGame = () => {
+    const shuffled = [...cards].sort(() => 0.5 - Math.random()).slice(0, 6);
+    const terms = shuffled.map(c => ({ id: c.id, text: c.term, type: 'term', matched: false }));
+    const defs = shuffled.map(c => ({ id: c.id, text: c.definition, type: 'def', matched: false }));
+    setGameCards([...terms, ...defs].sort(() => 0.5 - Math.random()));
+    setGameActive(true);
+    setGameTime(0);
+    setFirstSelection(null);
+  };
+
+  useEffect(() => {
+    let timer;
+    if (gameActive) timer = setInterval(() => setGameTime(prev => prev + 1), 1000);
+    return () => clearInterval(timer);
+  }, [gameActive]);
+
+  const handleGameCardClick = (card, index) => {
+    if (card.matched || (firstSelection && firstSelection.uniqueId === index)) return;
+    if (!firstSelection) {
+      setFirstSelection({ ...card, uniqueId: index });
+    } else {
+      if (firstSelection.id === card.id && firstSelection.type !== card.type) {
+        setGameCards(prev => prev.map((c, i) => (c.id === card.id) ? { ...c, matched: true } : c));
+        setFirstSelection(null);
+      } else {
+        setFirstSelection({ ...card, uniqueId: index });
+        setTimeout(() => setFirstSelection(null), 300);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (gameActive && gameCards.length > 0 && gameCards.every(c => c.matched)) setGameActive(false);
+  }, [gameCards, gameActive]);
 
   // CRUD & Import/Export
   const addCard = () => {
@@ -164,10 +203,15 @@ export default function MiniQuizlet() {
     <div className="min-h-screen bg-[#F6F7FB] text-slate-800 font-sans p-4 md:p-8">
       <header className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center mb-8">
         <h1 className="text-2xl font-bold text-[#4255FF] flex items-center gap-2">🇯🇵 Nihongo Quizlet</h1>
-        <nav className="flex bg-white p-1 rounded-lg shadow-sm mt-4 md:mt-0">
-          {[{ id: 'flashcard', label: 'Flashcards' }, { id: 'quiz', label: 'Kiểm tra' }, { id: 'edit', label: 'Danh sách' }].map(tab => (
-            <button key={tab.id} onClick={() => { setMode(tab.id); resetQuiz(); setIsFlipped(false); }}
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${mode === tab.id ? "bg-[#4255FF] text-white shadow-md" : "text-slate-500 hover:bg-slate-100"}`}>
+        <nav className="flex bg-white p-1 rounded-lg shadow-sm mt-4 md:mt-0 overflow-x-auto max-w-full">
+          {[
+            { id: 'flashcard', label: 'Flashcards' }, 
+            { id: 'quiz', label: 'Kiểm tra' }, 
+            { id: 'game', label: 'Trò chơi' }, // Tab mới
+            { id: 'edit', label: 'Danh sách' }
+          ].map(tab => (
+            <button key={tab.id} onClick={() => { setMode(tab.id); resetQuiz(); setIsFlipped(false); setGameActive(false); }}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all whitespace-nowrap ${mode === tab.id ? "bg-[#4255FF] text-white shadow-md" : "text-slate-500 hover:bg-slate-100"}`}>
               {tab.label}
             </button>
           ))}
@@ -179,7 +223,7 @@ export default function MiniQuizlet() {
         {mode === 'flashcard' && cards.length > 0 && (
           <div className="flex flex-col items-center">
             <div className="w-full flex justify-end mb-4">
-               <button onClick={shuffleCards} className="text-sm font-bold text-[#4255FF] bg-white px-4 py-2 rounded-lg shadow-sm hover:bg-blue-50 transition-colors">🔀 Trộn thứ tự thẻ</button>
+                <button onClick={shuffleCards} className="text-sm font-bold text-[#4255FF] bg-white px-4 py-2 rounded-lg shadow-sm hover:bg-blue-50 transition-colors">🔀 Trộn thứ tự thẻ</button>
             </div>
             <div className="relative w-full h-80 cursor-pointer perspective" onClick={() => setIsFlipped(!isFlipped)}>
               <div className={`relative w-full h-full duration-500 transform-style-3d transition-transform ${isFlipped ? 'rotate-y-180' : ''}`}>
@@ -205,24 +249,17 @@ export default function MiniQuizlet() {
             {cards.length < 4 ? (
               <div className="text-center py-20 text-slate-500">Cần ít nhất 4 thẻ để tạo bài kiểm tra.</div>
             ) : quizPool.length === 0 ? (
-              /* Chọn giới hạn câu hỏi */
               <div className="text-center py-10">
                 <h3 className="text-xl font-bold mb-6 text-slate-700">Chọn số lượng câu hỏi</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[5, 10, 20, -1].map((num) => (
-                    <button 
-                      key={num} 
-                      onClick={() => startQuiz(num)}
-                      className="p-4 bg-slate-50 border-2 border-slate-100 rounded-xl hover:border-[#4255FF] hover:bg-blue-50 font-bold transition-all"
-                    >
+                    <button key={num} onClick={() => startQuiz(num)} className="p-4 bg-slate-50 border-2 border-slate-100 rounded-xl hover:border-[#4255FF] hover:bg-blue-50 font-bold transition-all">
                       {num === -1 ? "Tất cả" : num}
                     </button>
                   ))}
                 </div>
-                <p className="mt-6 text-slate-400 text-sm italic">Hệ thống sẽ trộn câu hỏi ngẫu nhiên từ danh sách của bạn.</p>
               </div>
             ) : !quizFinished ? (
-              /* Đang làm Quiz */
               <div>
                 <div className="flex justify-between items-center text-sm text-slate-400 mb-6">
                   <div className="bg-slate-100 px-3 py-1 rounded-full">Câu {currentQuizIndex + 1} / {quizLimit}</div>
@@ -242,19 +279,55 @@ export default function MiniQuizlet() {
                 </div>
               </div>
             ) : (
-              /* Kết thúc Quiz */
               <div className="text-center py-10">
                 <div className="text-6xl mb-4">🎉</div>
                 <h2 className="text-2xl font-bold">Hoàn thành bài kiểm tra!</h2>
                 <p className="text-4xl font-black text-[#4255FF] my-4">{quizScore} / {quizLimit}</p>
-                <p className="text-slate-500 mb-8">Bạn đạt được {Math.round((quizScore/quizLimit)*100)}% số câu trả lời đúng.</p>
                 <button onClick={resetQuiz} className="px-8 py-3 bg-[#4255FF] text-white font-bold rounded-lg shadow-lg hover:bg-blue-700 transition-colors">Làm bài mới</button>
               </div>
             )}
           </div>
         )}
 
-        {/* MODE: EDIT (Giữ nguyên) */}
+        {/* MODE: GAME (PHẦN THÊM MỚI) */}
+        {mode === 'game' && (
+          <div className="bg-white p-6 rounded-xl shadow-md min-h-[450px]">
+            {cards.length < 3 ? (
+              <div className="text-center py-20 text-slate-500">Cần ít nhất 3 thẻ để chơi ghép cặp.</div>
+            ) : !gameActive && gameCards.length === 0 ? (
+              <div className="text-center py-16">
+                <h3 className="text-2xl font-bold mb-4">⚡ Ghép cặp nhanh</h3>
+                <p className="text-slate-500 mb-8">Nối từ tiếng Nhật và nghĩa tương ứng nhanh nhất có thể.</p>
+                <button onClick={startMatchGame} className="px-10 py-4 bg-[#4255FF] text-white font-bold rounded-xl shadow-lg hover:scale-105 transition-transform">Bắt đầu trò chơi</button>
+              </div>
+            ) : !gameActive && gameCards.every(c => c.matched) ? (
+              <div className="text-center py-16">
+                <h2 className="text-3xl font-bold mb-2 text-[#4255FF]">{gameTime} giây!</h2>
+                <p className="text-slate-500 mb-8 font-medium">Bạn đã hoàn thành thử thách.</p>
+                <button onClick={startMatchGame} className="px-8 py-3 bg-slate-800 text-white font-bold rounded-lg">Chơi lại</button>
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center mb-6 text-slate-500 font-bold">
+                  <span>Thời gian: {gameTime}s</span>
+                  <button onClick={() => {setGameActive(false); setGameCards([])}} className="text-sm text-red-500">Hủy</button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {gameCards.map((card, idx) => (
+                    <button key={idx} onClick={() => handleGameCardClick(card, idx)}
+                      className={`h-24 p-2 border-2 rounded-xl transition-all text-sm font-medium shadow-sm flex items-center justify-center text-center
+                        ${card.matched ? "opacity-0 pointer-events-none" : "bg-white hover:border-[#4255FF]"}
+                        ${firstSelection?.uniqueId === idx ? "border-[#4255FF] bg-blue-50" : "border-slate-100"}`}>
+                      {card.text}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* MODE: EDIT */}
         {mode === 'edit' && (
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="p-6 bg-slate-50 border-b">
@@ -266,35 +339,27 @@ export default function MiniQuizlet() {
                     <button onClick={() => setShowImport(!showImport)} className="text-sm text-[#4255FF] font-semibold hover:underline">{showImport ? "Đóng" : "+ Nhập Text"}</button>
                 </div>
               </div>
-
               {showImport && (
                 <div className="mb-6 animate-in fade-in duration-300">
                   <textarea value={importText} onChange={(e) => setImportText(e.target.value)} placeholder="Tiếng Nhật | Nghĩa tiếng Việt (mỗi từ 1 dòng)" className="w-full h-32 p-3 border rounded-md text-sm mb-2 focus:ring-2 focus:ring-[#4255FF] outline-none" />
                   <button onClick={handleBulkImport} className="w-full py-2 bg-[#4255FF] text-white font-bold rounded hover:bg-blue-700 transition-colors">Xác nhận Thêm</button>
                 </div>
               )}
-
               <div className="flex flex-col md:flex-row gap-4">
                 <input value={inputTerm} onChange={(e) => setInputTerm(e.target.value)} placeholder="Tiếng Nhật" className="flex-1 p-3 border rounded-md outline-none focus:ring-2 focus:ring-[#4255FF]" />
                 <input value={inputDef} onChange={(e) => setInputDef(e.target.value)} placeholder="Nghĩa" className="flex-1 p-3 border rounded-md outline-none focus:ring-2 focus:ring-[#4255FF]" />
                 <button onClick={addCard} className="px-6 py-3 bg-slate-800 text-white font-bold rounded-md hover:bg-black">Thêm</button>
               </div>
             </div>
-
             <div className="p-4 bg-white border-b flex justify-between items-center">
               <h3 className="font-bold text-slate-700">Danh sách ({cards.length})</h3>
               {cards.length > 0 && (
                 <div className="flex gap-2">
-                  <button onClick={handleExportToFile} className="text-xs font-bold text-slate-600 px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 flex items-center gap-1">
-                    💾 Xuất File .txt
-                  </button>
-                  <button onClick={clearAllCards} className="text-xs font-bold text-red-500 px-3 py-1.5 rounded border border-red-200 hover:bg-red-50">
-                    🗑 Xoá sạch
-                  </button>
+                  <button onClick={handleExportToFile} className="text-xs font-bold text-slate-600 px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 flex items-center gap-1">💾 Xuất File .txt</button>
+                  <button onClick={clearAllCards} className="text-xs font-bold text-red-500 px-3 py-1.5 rounded border border-red-200 hover:bg-red-50">🗑 Xoá sạch</button>
                 </div>
               )}
             </div>
-
             <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
               {cards.map((card, index) => (
                 <div key={card.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors">
