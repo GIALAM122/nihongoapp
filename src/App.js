@@ -1,10 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 
 const STORAGE_KEY = "jp_quizlet_data";
+const FOLDER_KEY = "jp_quizlet_folders"; // Key mới cho folders
 
 export default function MiniQuizlet() {
   // --- STATE ---
   const [cards, setCards] = useState([]);
+  const [folders, setFolders] = useState([{ id: "default", name: "Mặc định" }]);
+  const [activeFolderId, setActiveFolderId] = useState("default");
+  const [newFolderName, setNewFolderName] = useState("");
+  
   const [mode, setMode] = useState("flashcard");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -33,37 +38,70 @@ export default function MiniQuizlet() {
 
   // --- INIT & SAVE ---
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) setCards(JSON.parse(saved));
-    else setCards([
-      { id: 1, term: "猫 (ねこ)", definition: "Con mèo" },
-      { id: 2, term: "学生 (がくせい)", definition: "Học sinh" },
-      { id: 3, term: "先生 (せんせい)", definition: "Giáo viên" },
-      { id: 4, term: "日本語 (にほんご)", definition: "Tiếng Nhật" },
-      { id: 5, term: "ありがとう", definition: "Cảm ơn" },
-    ]);
+    const savedCards = localStorage.getItem(STORAGE_KEY);
+    const savedFolders = localStorage.getItem(FOLDER_KEY);
+    
+    if (savedFolders) setFolders(JSON.parse(savedFolders));
+    if (savedCards) {
+        // Migration: Nếu card cũ chưa có folderId, gán vào 'default'
+        const parsedCards = JSON.parse(savedCards).map(c => c.folderId ? c : {...c, folderId: 'default'});
+        setCards(parsedCards);
+    } else {
+        setCards([
+            { id: 1, term: "猫 (ねこ)", definition: "Con mèo", folderId: "default" },
+            { id: 2, term: "学生 (gaku sei)", definition: "Học sinh", folderId: "default" },
+        ]);
+    }
   }, []);
 
   useEffect(() => {
-    if (cards.length > 0) localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
   }, [cards]);
+
+  useEffect(() => {
+    localStorage.setItem(FOLDER_KEY, JSON.stringify(folders));
+  }, [folders]);
+
+  // --- FILTERED DATA ---
+  // Chỉ lấy những thẻ thuộc bộ bài đang chọn
+  const currentFolderCards = useMemo(() => {
+    return cards.filter(c => c.folderId === activeFolderId);
+  }, [cards, activeFolderId]);
 
   // --- LOGIC FUNCTIONS ---
   
-  // Audio Logic (PHẦN THÊM MỚI)
+  // Quản lý Folder
+  const addFolder = () => {
+    if (!newFolderName.trim()) return;
+    const newFolder = { id: Date.now().toString(), name: newFolderName };
+    setFolders([...folders, newFolder]);
+    setNewFolderName("");
+    setActiveFolderId(newFolder.id);
+    setCurrentIndex(0);
+  };
+
+  const deleteFolder = (id) => {
+    if (id === 'default') return alert("Không thể xoá bộ mặc định");
+    if (confirm("Xoá bộ bài này sẽ xoá tất cả thẻ bên trong?")) {
+        setCards(cards.filter(c => c.folderId !== id));
+        setFolders(folders.filter(f => f.id !== id));
+        setActiveFolderId('default');
+    }
+  };
+
+  // Audio Logic
   const speakJP = (text) => {
     if (!text) return;
-    // Hủy các yêu cầu đọc đang chờ để tránh chồng chéo âm thanh
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ja-JP'; // Thiết lập giọng đọc tiếng Nhật
-    utterance.rate = 0.9;     // Tốc độ đọc hơi chậm một chút để dễ nghe
+    utterance.lang = 'ja-JP';
+    utterance.rate = 0.9;
     window.speechSynthesis.speak(utterance);
   };
 
   // Flashcard Logic
-  const handleNextCard = () => { setIsFlipped(false); setTimeout(() => setCurrentIndex((prev) => (prev + 1) % cards.length), 150); };
-  const handlePrevCard = () => { setIsFlipped(false); setTimeout(() => setCurrentIndex((prev) => (prev - 1 + cards.length) % cards.length), 150); };
+  const handleNextCard = () => { setIsFlipped(false); setTimeout(() => setCurrentIndex((prev) => (prev + 1) % currentFolderCards.length), 150); };
+  const handlePrevCard = () => { setIsFlipped(false); setTimeout(() => setCurrentIndex((prev) => (prev - 1 + currentFolderCards.length) % currentFolderCards.length), 150); };
   
   const shuffleCards = () => {
     const shuffled = [...cards].sort(() => Math.random() - 0.5);
@@ -74,8 +112,8 @@ export default function MiniQuizlet() {
 
   // Quiz Logic
   const startQuiz = (limit) => {
-    const shuffledPool = [...cards].sort(() => Math.random() - 0.5);
-    const actualLimit = limit === -1 ? cards.length : Math.min(limit, cards.length);
+    const shuffledPool = [...currentFolderCards].sort(() => Math.random() - 0.5);
+    const actualLimit = limit === -1 ? currentFolderCards.length : Math.min(limit, currentFolderCards.length);
     setQuizPool(shuffledPool.slice(0, actualLimit));
     setQuizLimit(actualLimit);
     setQuizFinished(false);
@@ -87,20 +125,17 @@ export default function MiniQuizlet() {
   const currentQuizData = useMemo(() => {
     if (quizPool.length === 0 || quizFinished) return null;
     const currentCard = quizPool[currentQuizIndex];
-    const otherCards = cards.filter(c => c.id !== currentCard.id);
+    const otherCards = currentFolderCards.filter(c => c.id !== currentCard.id);
     const shuffledOthers = [...otherCards].sort(() => 0.5 - Math.random());
     const wrongAnswers = shuffledOthers.slice(0, 3).map(c => c.definition);
     const allAnswers = [...wrongAnswers, currentCard.definition].sort(() => 0.5 - Math.random());
     return { question: currentCard.term, correctAnswer: currentCard.definition, answers: allAnswers };
-  }, [quizPool, currentQuizIndex, quizFinished, cards]);
+  }, [quizPool, currentQuizIndex, quizFinished, currentFolderCards]);
 
   const handleAnswerClick = (ans) => {
     if (selectedAnswer) return;
     setSelectedAnswer(ans);
-    if (ans === currentQuizData.correctAnswer) {
-        setQuizScore(prev => prev + 1);
-        // Có thể thêm âm thanh "ding" ở đây nếu muốn
-    }
+    if (ans === currentQuizData.correctAnswer) setQuizScore(prev => prev + 1);
     
     setTimeout(() => {
       if (currentQuizIndex < quizPool.length - 1) { 
@@ -112,14 +147,11 @@ export default function MiniQuizlet() {
     }, 1000);
   };
 
-  const resetQuiz = () => { 
-    setQuizPool([]); 
-    setQuizLimit(0); 
-  };
+  const resetQuiz = () => { setQuizPool([]); setQuizLimit(0); };
 
   // Game Match Logic
   const startMatchGame = () => {
-    const shuffled = [...cards].sort(() => 0.5 - Math.random()).slice(0, 6);
+    const shuffled = [...currentFolderCards].sort(() => 0.5 - Math.random()).slice(0, 6);
     const terms = shuffled.map(c => ({ id: c.id, text: c.term, type: 'term', matched: false }));
     const defs = shuffled.map(c => ({ id: c.id, text: c.definition, type: 'def', matched: false }));
     setGameCards([...terms, ...defs].sort(() => 0.5 - Math.random()));
@@ -136,8 +168,6 @@ export default function MiniQuizlet() {
 
   const handleGameCardClick = (card, index) => {
     if (card.matched || (firstSelection && firstSelection.uniqueId === index)) return;
-    
-    // Phát âm khi nhấn vào thẻ tiếng Nhật trong game
     if (card.type === 'term') speakJP(card.text);
 
     if (!firstSelection) {
@@ -160,36 +190,35 @@ export default function MiniQuizlet() {
   // CRUD & Import/Export
   const addCard = () => {
     if (!inputTerm || !inputDef) return;
-    setCards([...cards, { id: Date.now(), term: inputTerm, definition: inputDef }]);
+    setCards([...cards, { id: Date.now(), term: inputTerm, definition: inputDef, folderId: activeFolderId }]);
     setInputTerm(""); setInputDef("");
   };
 
   const deleteCard = (id) => {
     if (confirm("Xoá thẻ này?")) {
-      const newCards = cards.filter(c => c.id !== id);
-      setCards(newCards);
-      if (newCards.length === 0) { localStorage.removeItem(STORAGE_KEY); setCurrentIndex(0); }
+      setCards(cards.filter(c => c.id !== id));
+      if (currentIndex >= currentFolderCards.length - 1) setCurrentIndex(0);
     }
   };
 
   const clearAllCards = () => {
-    if (confirm("Bạn có chắc chắn muốn XOÁ TOÀN BỘ danh sách?")) {
-      setCards([]); localStorage.removeItem(STORAGE_KEY); setCurrentIndex(0); setCurrentQuizIndex(0);
+    if (confirm("Xoá TOÀN BỘ thẻ trong bộ này?")) {
+        setCards(cards.filter(c => c.folderId !== activeFolderId));
+        setCurrentIndex(0);
     }
   };
 
   const handleExportToFile = () => {
-    if (cards.length === 0) return alert("Không có dữ liệu để xuất!");
-    const content = cards.map(c => `${c.term} | ${c.definition}`).join("\n");
+    if (currentFolderCards.length === 0) return alert("Không có dữ liệu!");
+    const content = currentFolderCards.map(c => `${c.term} | ${c.definition}`).join("\n");
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `nihongo_quizlet_${new Date().toLocaleDateString()}.txt`;
+    link.download = `folder_${activeFolderId}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const handleFileUpload = (e) => {
@@ -207,7 +236,7 @@ export default function MiniQuizlet() {
     const newCards = lines.map((line) => {
       let parts = line.includes("|") ? line.split("|") : line.split("-");
       if (parts.length < 2) return null;
-      return { id: Date.now() + Math.random(), term: parts[0].trim(), definition: parts.slice(1).join(" ").trim() };
+      return { id: Date.now() + Math.random(), term: parts[0].trim(), definition: parts.slice(1).join(" ").trim(), folderId: activeFolderId };
     }).filter(Boolean);
 
     if (newCards.length > 0) {
@@ -220,7 +249,7 @@ export default function MiniQuizlet() {
   return (
     <div className="min-h-screen bg-[#F6F7FB] text-slate-800 font-sans p-4 md:p-8">
       <header className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-[#4255FF] flex items-center gap-2">🇯🇵 Nihongo Quizlet By HGL</h1>
+        <h1 className="text-2xl font-bold text-[#4255FF] flex items-center gap-2">🇯🇵 Nihongo Quizlet by HGL</h1>
         <nav className="flex bg-white p-1 rounded-lg shadow-sm mt-4 md:mt-0 overflow-x-auto max-w-full">
           {[
             { id: 'flashcard', label: 'Flashcards' }, 
@@ -236,45 +265,68 @@ export default function MiniQuizlet() {
         </nav>
       </header>
 
+      {/* SECTION: FOLDER MANAGER */}
+      <div className="max-w-3xl mx-auto mb-6">
+        <div className="flex flex-wrap gap-2 items-center bg-white p-3 rounded-xl shadow-sm">
+            <span className="text-xs font-bold text-slate-400 uppercase ml-2">Bộ bài:</span>
+            {folders.map(f => (
+                <div key={f.id} className="group relative">
+                    <button onClick={() => {setActiveFolderId(f.id); setCurrentIndex(0);}}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${activeFolderId === f.id ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                        {f.name}
+                    </button>
+                    {f.id !== 'default' && (
+                        <button onClick={() => deleteFolder(f.id)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] hidden group-hover:flex items-center justify-center">✕</button>
+                    )}
+                </div>
+            ))}
+            <div className="flex gap-1 ml-auto">
+                <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Tên bộ mới..." className="text-sm border rounded-full px-3 py-1 outline-none focus:border-[#4255FF]" />
+                <button onClick={addFolder} className="bg-[#4255FF] text-white rounded-full px-3 py-1 text-sm">+</button>
+            </div>
+        </div>
+      </div>
+
       <main className="max-w-3xl mx-auto">
         {/* MODE: FLASHCARD */}
-        {mode === 'flashcard' && cards.length > 0 && (
-          <div className="flex flex-col items-center">
-            <div className="w-full flex justify-end mb-4 gap-2">
-                {/* Nút phát âm thủ công */}
-                <button onClick={() => speakJP(cards[currentIndex].term)} className="text-sm font-bold text-slate-600 bg-white px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 transition-colors">🔊 Nghe</button>
-                <button onClick={shuffleCards} className="text-sm font-bold text-[#4255FF] bg-white px-4 py-2 rounded-lg shadow-sm hover:bg-blue-50 transition-colors">🔀 Trộn thẻ</button>
-            </div>
-            <div className="relative w-full h-80 cursor-pointer perspective" 
-                 onClick={() => { 
-                    if(!isFlipped) speakJP(cards[currentIndex].term); // Tự động đọc khi lật sang mặt trước
-                    setIsFlipped(!isFlipped); 
-                 }}>
-              <div className={`relative w-full h-full duration-500 transform-style-3d transition-transform ${isFlipped ? 'rotate-y-180' : ''}`}>
-                <div className="absolute inset-0 bg-white border-2 border-slate-200 rounded-xl shadow-lg flex items-center justify-center backface-hidden">
-                  <span className="text-4xl font-medium text-slate-700">{cards[currentIndex].term}</span>
+        {mode === 'flashcard' && (
+            currentFolderCards.length > 0 ? (
+                <div className="flex flex-col items-center">
+                    <div className="w-full flex justify-end mb-4 gap-2">
+                        <button onClick={() => speakJP(currentFolderCards[currentIndex].term)} className="text-sm font-bold text-slate-600 bg-white px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 transition-colors">🔊 Nghe</button>
+                        <button onClick={shuffleCards} className="text-sm font-bold text-[#4255FF] bg-white px-4 py-2 rounded-lg shadow-sm hover:bg-blue-50 transition-colors">🔀 Trộn thẻ</button>
+                    </div>
+                    <div className="relative w-full h-80 cursor-pointer perspective" 
+                        onClick={() => { 
+                            if(!isFlipped) speakJP(currentFolderCards[currentIndex].term);
+                            setIsFlipped(!isFlipped); 
+                        }}>
+                    <div className={`relative w-full h-full duration-500 transform-style-3d transition-transform ${isFlipped ? 'rotate-y-180' : ''}`}>
+                        <div className="absolute inset-0 bg-white border-2 border-slate-200 rounded-xl shadow-lg flex items-center justify-center backface-hidden">
+                        <span className="text-4xl font-medium text-slate-700">{currentFolderCards[currentIndex].term}</span>
+                        </div>
+                        <div className="absolute inset-0 bg-white border-2 border-[#4255FF] rounded-xl shadow-lg flex items-center justify-center rotate-y-180 backface-hidden">
+                        <span className="text-2xl md:text-3xl text-[#4255FF] px-4 text-center">{currentFolderCards[currentIndex].definition}</span>
+                        </div>
+                    </div>
+                    </div>
+                    <div className="flex items-center gap-6 mt-8">
+                    <button onClick={handlePrevCard} className="p-3 rounded-full bg-white shadow hover:bg-slate-50">← Prev</button>
+                    <span className="font-bold text-slate-400">{currentIndex + 1} / {currentFolderCards.length}</span>
+                    <button onClick={handleNextCard} className="p-3 rounded-full bg-white shadow hover:bg-slate-50">Next →</button>
+                    </div>
                 </div>
-                <div className="absolute inset-0 bg-white border-2 border-[#4255FF] rounded-xl shadow-lg flex items-center justify-center rotate-y-180 backface-hidden">
-                  <span className="text-2xl md:text-3xl text-[#4255FF] px-4 text-center">{cards[currentIndex].definition}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-6 mt-8">
-              <button onClick={handlePrevCard} className="p-3 rounded-full bg-white shadow hover:bg-slate-50">← Prev</button>
-              <span className="font-bold text-slate-400">{currentIndex + 1} / {cards.length}</span>
-              <button onClick={handleNextCard} className="p-3 rounded-full bg-white shadow hover:bg-slate-50">Next →</button>
-            </div>
-          </div>
+            ) : <div className="text-center py-20 bg-white rounded-xl">Bộ bài này trống. Hãy sang mục "Danh sách" để thêm thẻ!</div>
         )}
 
         {/* MODE: QUIZ */}
         {mode === 'quiz' && (
           <div className="bg-white p-6 rounded-xl shadow-md min-h-[400px]">
-            {cards.length < 4 ? (
-              <div className="text-center py-20 text-slate-500">Cần ít nhất 4 thẻ để tạo bài kiểm tra.</div>
+            {currentFolderCards.length < 4 ? (
+              <div className="text-center py-20 text-slate-500">Cần ít nhất 4 thẻ trong bộ này để làm bài kiểm tra.</div>
             ) : quizPool.length === 0 ? (
               <div className="text-center py-10">
-                <h3 className="text-xl font-bold mb-6 text-slate-700">Chọn số lượng câu hỏi</h3>
+                <h3 className="text-xl font-bold mb-6 text-slate-700">Kiểm tra bộ: {folders.find(f => f.id === activeFolderId)?.name}</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[5, 10, 20, -1].map((num) => (
                     <button key={num} onClick={() => startQuiz(num)} className="p-4 bg-slate-50 border-2 border-slate-100 rounded-xl hover:border-[#4255FF] hover:bg-blue-50 font-bold transition-all">
@@ -319,18 +371,17 @@ export default function MiniQuizlet() {
         {/* MODE: GAME */}
         {mode === 'game' && (
           <div className="bg-white p-6 rounded-xl shadow-md min-h-[450px]">
-            {cards.length < 3 ? (
-              <div className="text-center py-20 text-slate-500">Cần ít nhất 3 thẻ để chơi ghép cặp.</div>
+            {currentFolderCards.length < 3 ? (
+              <div className="text-center py-20 text-slate-500">Cần ít nhất 3 thẻ để chơi.</div>
             ) : !gameActive && gameCards.length === 0 ? (
               <div className="text-center py-16">
                 <h3 className="text-2xl font-bold mb-4">⚡ Ghép cặp nhanh</h3>
-                <p className="text-slate-500 mb-8">Nối từ tiếng Nhật và nghĩa tương ứng nhanh nhất có thể.</p>
+                <p className="text-slate-500 mb-8">Bộ đang chơi: {folders.find(f => f.id === activeFolderId)?.name}</p>
                 <button onClick={startMatchGame} className="px-10 py-4 bg-[#4255FF] text-white font-bold rounded-xl shadow-lg hover:scale-105 transition-transform">Bắt đầu trò chơi</button>
               </div>
             ) : !gameActive && gameCards.every(c => c.matched) ? (
               <div className="text-center py-16">
                 <h2 className="text-3xl font-bold mb-2 text-[#4255FF]">{gameTime} giây!</h2>
-                <p className="text-slate-500 mb-8 font-medium">Bạn đã hoàn thành thử thách.</p>
                 <button onClick={startMatchGame} className="px-8 py-3 bg-slate-800 text-white font-bold rounded-lg">Chơi lại</button>
               </div>
             ) : (
@@ -359,7 +410,7 @@ export default function MiniQuizlet() {
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             <div className="p-6 bg-slate-50 border-b">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold">Thêm thẻ mới</h3>
+                <h3 className="font-bold">Thêm thẻ vào bộ: {folders.find(f => f.id === activeFolderId)?.name}</h3>
                 <div className="flex gap-3">
                     <input type="file" accept=".txt" ref={fileInputRef} onChange={handleFileUpload} className="hidden" />
                     <button onClick={() => fileInputRef.current.click()} className="text-sm text-green-600 font-semibold hover:underline">📁 Nhập File</button>
@@ -379,16 +430,16 @@ export default function MiniQuizlet() {
               </div>
             </div>
             <div className="p-4 bg-white border-b flex justify-between items-center">
-              <h3 className="font-bold text-slate-700">Danh sách ({cards.length})</h3>
-              {cards.length > 0 && (
+              <h3 className="font-bold text-slate-700">Danh sách ({currentFolderCards.length})</h3>
+              {currentFolderCards.length > 0 && (
                 <div className="flex gap-2">
-                  <button onClick={handleExportToFile} className="text-xs font-bold text-slate-600 px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 flex items-center gap-1">💾 Xuất File .txt</button>
-                  <button onClick={clearAllCards} className="text-xs font-bold text-red-500 px-3 py-1.5 rounded border border-red-200 hover:bg-red-50">🗑 Xoá sạch</button>
+                  <button onClick={handleExportToFile} className="text-xs font-bold text-slate-600 px-3 py-1.5 rounded border border-slate-200 hover:bg-slate-50 flex items-center gap-1">💾 Xuất File</button>
+                  <button onClick={clearAllCards} className="text-xs font-bold text-red-500 px-3 py-1.5 rounded border border-red-200 hover:bg-red-50">🗑 Xoá sạch bộ này</button>
                 </div>
               )}
             </div>
             <div className="divide-y divide-slate-100 max-h-[500px] overflow-y-auto">
-              {cards.map((card, index) => (
+              {currentFolderCards.map((card, index) => (
                 <div key={card.id} className="p-4 flex justify-between items-center hover:bg-slate-50 transition-colors">
                   <div className="flex gap-4 items-center">
                     <span className="text-slate-300 text-sm font-bold">{index + 1}</span>
