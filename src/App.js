@@ -17,7 +17,7 @@ export default function MiniQuizlet() {
   const [quizPool, setQuizPool] = useState([]); 
   const [quizLimit, setQuizLimit] = useState(0); 
 
-  // Game State (PHẦN THÊM MỚI)
+  // Game State
   const [gameCards, setGameCards] = useState([]);
   const [gameActive, setGameActive] = useState(false);
   const [gameTime, setGameTime] = useState(0);
@@ -50,6 +50,17 @@ export default function MiniQuizlet() {
 
   // --- LOGIC FUNCTIONS ---
   
+  // Audio Logic (PHẦN THÊM MỚI)
+  const speakJP = (text) => {
+    if (!text) return;
+    // Hủy các yêu cầu đọc đang chờ để tránh chồng chéo âm thanh
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'ja-JP'; // Thiết lập giọng đọc tiếng Nhật
+    utterance.rate = 0.9;     // Tốc độ đọc hơi chậm một chút để dễ nghe
+    window.speechSynthesis.speak(utterance);
+  };
+
   // Flashcard Logic
   const handleNextCard = () => { setIsFlipped(false); setTimeout(() => setCurrentIndex((prev) => (prev + 1) % cards.length), 150); };
   const handlePrevCard = () => { setIsFlipped(false); setTimeout(() => setCurrentIndex((prev) => (prev - 1 + cards.length) % cards.length), 150); };
@@ -86,7 +97,10 @@ export default function MiniQuizlet() {
   const handleAnswerClick = (ans) => {
     if (selectedAnswer) return;
     setSelectedAnswer(ans);
-    if (ans === currentQuizData.correctAnswer) setQuizScore(prev => prev + 1);
+    if (ans === currentQuizData.correctAnswer) {
+        setQuizScore(prev => prev + 1);
+        // Có thể thêm âm thanh "ding" ở đây nếu muốn
+    }
     
     setTimeout(() => {
       if (currentQuizIndex < quizPool.length - 1) { 
@@ -103,7 +117,7 @@ export default function MiniQuizlet() {
     setQuizLimit(0); 
   };
 
-  // Game Match Logic (PHẦN THÊM MỚI)
+  // Game Match Logic
   const startMatchGame = () => {
     const shuffled = [...cards].sort(() => 0.5 - Math.random()).slice(0, 6);
     const terms = shuffled.map(c => ({ id: c.id, text: c.term, type: 'term', matched: false }));
@@ -122,6 +136,10 @@ export default function MiniQuizlet() {
 
   const handleGameCardClick = (card, index) => {
     if (card.matched || (firstSelection && firstSelection.uniqueId === index)) return;
+    
+    // Phát âm khi nhấn vào thẻ tiếng Nhật trong game
+    if (card.type === 'term') speakJP(card.text);
+
     if (!firstSelection) {
       setFirstSelection({ ...card, uniqueId: index });
     } else {
@@ -207,7 +225,7 @@ export default function MiniQuizlet() {
           {[
             { id: 'flashcard', label: 'Flashcards' }, 
             { id: 'quiz', label: 'Kiểm tra' }, 
-            { id: 'game', label: 'Trò chơi' }, // Tab mới
+            { id: 'game', label: 'Trò chơi' }, 
             { id: 'edit', label: 'Danh sách' }
           ].map(tab => (
             <button key={tab.id} onClick={() => { setMode(tab.id); resetQuiz(); setIsFlipped(false); setGameActive(false); }}
@@ -222,10 +240,16 @@ export default function MiniQuizlet() {
         {/* MODE: FLASHCARD */}
         {mode === 'flashcard' && cards.length > 0 && (
           <div className="flex flex-col items-center">
-            <div className="w-full flex justify-end mb-4">
-                <button onClick={shuffleCards} className="text-sm font-bold text-[#4255FF] bg-white px-4 py-2 rounded-lg shadow-sm hover:bg-blue-50 transition-colors">🔀 Trộn thứ tự thẻ</button>
+            <div className="w-full flex justify-end mb-4 gap-2">
+                {/* Nút phát âm thủ công */}
+                <button onClick={() => speakJP(cards[currentIndex].term)} className="text-sm font-bold text-slate-600 bg-white px-4 py-2 rounded-lg shadow-sm hover:bg-slate-50 transition-colors">🔊 Nghe</button>
+                <button onClick={shuffleCards} className="text-sm font-bold text-[#4255FF] bg-white px-4 py-2 rounded-lg shadow-sm hover:bg-blue-50 transition-colors">🔀 Trộn thẻ</button>
             </div>
-            <div className="relative w-full h-80 cursor-pointer perspective" onClick={() => setIsFlipped(!isFlipped)}>
+            <div className="relative w-full h-80 cursor-pointer perspective" 
+                 onClick={() => { 
+                    if(!isFlipped) speakJP(cards[currentIndex].term); // Tự động đọc khi lật sang mặt trước
+                    setIsFlipped(!isFlipped); 
+                 }}>
               <div className={`relative w-full h-full duration-500 transform-style-3d transition-transform ${isFlipped ? 'rotate-y-180' : ''}`}>
                 <div className="absolute inset-0 bg-white border-2 border-slate-200 rounded-xl shadow-lg flex items-center justify-center backface-hidden">
                   <span className="text-4xl font-medium text-slate-700">{cards[currentIndex].term}</span>
@@ -268,7 +292,10 @@ export default function MiniQuizlet() {
                 <div className="w-full bg-slate-100 h-2 rounded-full mb-8 overflow-hidden">
                    <div className="bg-[#4255FF] h-full transition-all duration-300" style={{ width: `${((currentQuizIndex + 1) / quizLimit) * 100}%` }}></div>
                 </div>
-                <h2 className="text-3xl text-center font-bold py-6">{currentQuizData?.question}</h2>
+                <div className="flex flex-col items-center py-6">
+                    <h2 className="text-3xl text-center font-bold mb-4">{currentQuizData?.question}</h2>
+                    <button onClick={() => speakJP(currentQuizData?.question)} className="p-2 text-[#4255FF] hover:scale-110 transition-transform">🔊 Nghe phát âm</button>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {currentQuizData?.answers.map((ans, idx) => (
                     <button key={idx} disabled={!!selectedAnswer} onClick={() => handleAnswerClick(ans)}
@@ -289,7 +316,7 @@ export default function MiniQuizlet() {
           </div>
         )}
 
-        {/* MODE: GAME (PHẦN THÊM MỚI) */}
+        {/* MODE: GAME */}
         {mode === 'game' && (
           <div className="bg-white p-6 rounded-xl shadow-md min-h-[450px]">
             {cards.length < 3 ? (
@@ -368,7 +395,10 @@ export default function MiniQuizlet() {
                     <span className="font-medium text-slate-800">{card.term}</span>
                     <span className="text-slate-500">— {card.definition}</span>
                   </div>
-                  <button onClick={() => deleteCard(card.id)} className="text-slate-300 hover:text-red-500 px-2 transition-colors">✕</button>
+                  <div className="flex gap-2">
+                    <button onClick={() => speakJP(card.term)} className="text-slate-300 hover:text-[#4255FF] px-2 transition-colors">🔊</button>
+                    <button onClick={() => deleteCard(card.id)} className="text-slate-300 hover:text-red-500 px-2 transition-colors">✕</button>
+                  </div>
                 </div>
               ))}
             </div>
