@@ -220,7 +220,7 @@ export default function MiniQuizlet() {
   return (
     <div className="min-h-screen bg-[#F6F7FB] text-slate-800 font-sans p-4 md:p-8">
       <header className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-[#4255FF] flex items-center gap-2">🇯🇵 Nihongo Quizlet</h1>
+        <h1 className="text-2xl font-bold text-[#4255FF] flex items-center gap-2">🇯🇵 Nihongo Quizlet By HGL</h1>
         <nav className="flex bg-white p-1 rounded-lg shadow-sm mt-4 md:mt-0 overflow-x-auto max-w-full">
           {[
             { id: 'flashcard', label: 'Flashcards' }, 
