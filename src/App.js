@@ -263,7 +263,8 @@ export default function FullQuizletApp() {
                       </span>                       <p className="mt-12 text-slate-300 font-bold uppercase tracking-[0.3em] text-[10px]">Chạm để xem nghĩa</p>
                     </div>
                     <div className="absolute inset-0 bg-white border-4 border-[#4255FF] rounded-[2.5rem] shadow-xl flex flex-col items-center justify-center rotate-y-180 backface-hidden p-8 text-center">
-<h3 className="text-2xl sm:text-3xl md:text-5xl font-black text-[#4255FF] mb-6 leading-tight px-4">
+<h3 className="text-xl sm:text-2xl md:text-4xl font-black text-[#4255FF] mb-6 leading-tight px-4
+">
   {folderCards[currentIndex].definition}
 </h3>                      <button onClick={(e) => { e.stopPropagation(); speakJP(folderCards[currentIndex].term) }} className="w-16 h-16 bg-blue-50 text-[#4255FF] rounded-full text-2xl active:scale-90 transition-transform">🔊</button>
                     </div>
