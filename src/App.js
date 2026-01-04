@@ -24,37 +24,31 @@ export default function FullQuizletApp() {
 
   // --- 2. STATES QUẢN LÝ GIAO DIỆN ---
   const [activeFolderId, setActiveFolderId] = useState(null);
-  const [mode, setMode] = useState("flashcard"); // flashcard, write, quiz, game, edit
+  const [mode, setMode] = useState("flashcard");
   const [searchTerm, setSearchTerm] = useState("");
   
-  // States cho Flashcard/Học
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
   const [autoPlay, setAutoPlay] = useState(false);
   
-  // States cho Swipe (Mobile)
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
 
-  // States cho Write Mode
   const [writeInput, setWriteInput] = useState("");
   const [writeFeedback, setWriteFeedback] = useState(null);
 
-  // States cho Quiz Mode
   const [quizPool, setQuizPool] = useState([]);
   const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
   const [quizScore, setQuizScore] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
 
-  // States cho Game Mode
   const [gameActive, setGameActive] = useState(false);
   const [gameCards, setGameCards] = useState([]);
   const [gameTime, setGameTime] = useState(0);
   const [firstSelection, setFirstSelection] = useState(null);
 
-  // States cho Form/Edit
   const [newFolder, setNewFolder] = useState({ name: "", desc: "" });
   const [inputTerm, setInputTerm] = useState("");
   const [inputDef, setInputDef] = useState("");
@@ -77,6 +71,20 @@ export default function FullQuizletApp() {
     ), [folderCards, searchTerm]);
 
   // --- 4. HÀM HỖ TRỢ (HELPERS) ---
+  
+  // Logic kiểm tra trùng thẻ (dựa trên Hán tự/Từ vựng)
+  const isDuplicate = (term) => {
+    return folderCards.some(c => c.term.trim().toLowerCase() === term.trim().toLowerCase());
+  };
+
+  // Logic xóa sạch thẻ trong bộ hiện tại
+  const handleClearAllCards = () => {
+    if (window.confirm("Cảnh báo: Bạn có chắc chắn muốn XÓA SẠCH toàn bộ thẻ trong bộ này không?")) {
+      setCards(prev => prev.filter(c => c.folderId !== activeFolderId));
+      setCurrentIndex(0);
+    }
+  };
+
   const speakJP = (text) => {
     if (typeof window === 'undefined') return;
     window.speechSynthesis.cancel();
@@ -95,7 +103,6 @@ export default function FullQuizletApp() {
     setCurrentIndex((prev) => (prev - 1 + folderCards.length) % (folderCards.length || 1));
   };
 
-  // Logic Auto-play
   useEffect(() => {
     let timer;
     if (autoPlay && mode === 'flashcard') {
@@ -111,7 +118,6 @@ export default function FullQuizletApp() {
     return () => clearTimeout(timer);
   }, [autoPlay, isFlipped, currentIndex, mode]);
 
-  // Xuất file TXT
   const exportToTxt = () => {
     const content = folderCards.map(c => `${c.term} | ${c.definition}`).join('\n');
     const blob = new Blob([content], { type: 'text/plain' });
@@ -165,7 +171,7 @@ export default function FullQuizletApp() {
     }
   };
 
-  // --- 6. GIAO DIỆN DANH SÁCH BỘ THẺ (HOME) ---
+  // --- 6. GIAO DIỆN HOME ---
   if (!activeFolderId) {
     return (
       <div className="min-h-screen bg-[#F6F7FB] p-6 md:p-16 font-sans">
@@ -185,7 +191,6 @@ export default function FullQuizletApp() {
         </header>
 
         <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {/* Nút tạo bộ mới */}
           <div className="bg-white p-8 rounded-[2.5rem] border-4 border-dashed border-slate-200 flex flex-col justify-center shadow-sm hover:border-[#4255FF] transition-colors group">
             <h3 className="text-xl font-black mb-4 group-hover:text-[#4255FF]">Tạo bộ thẻ mới</h3>
             <input value={newFolder.name} onChange={e => setNewFolder({...newFolder, name: e.target.value})} placeholder="Tên bộ (VD: N2 Kanji)..." className="p-4 bg-slate-50 rounded-2xl mb-3 outline-none font-bold text-sm border-2 border-transparent focus:border-[#4255FF] transition-all" />
@@ -213,10 +218,9 @@ export default function FullQuizletApp() {
     );
   }
 
-  // --- 7. GIAO DIỆN CHI TIẾT KHI VÀO 1 BỘ THẺ ---
+  // --- 7. GIAO DIỆN CHI TIẾT ---
   return (
     <div className="min-h-screen bg-[#F6F7FB] font-sans text-slate-800 pb-20">
-      {/* Thanh điều hướng */}
       <nav className="bg-white/90 backdrop-blur-md border-b sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <button onClick={() => {setActiveFolderId(null); setAutoPlay(false);}} className="font-black text-slate-400 hover:text-slate-800 px-2 transition-colors text-xl">✕</button>
@@ -242,7 +246,6 @@ export default function FullQuizletApp() {
           </div>
         ) : (
           <div className="animate-in">
-            {/* --- FLASHCARD MODE --- */}
             {mode === 'flashcard' && (
               <div className="flex flex-col items-center">
                 <div className="w-full bg-slate-200 h-1.5 rounded-full mb-8 overflow-hidden flex">
@@ -279,12 +282,10 @@ export default function FullQuizletApp() {
               </div>
             )}
 
-            {/* --- WRITE MODE --- */}
             {mode === 'write' && (
               <div className="max-w-2xl mx-auto bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
                 <div className="text-center mb-10">
                   <h3 className="text-8xl font-black text-slate-800 mb-6">{folderCards[currentIndex].term}</h3>
-                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Nhập nghĩa chính xác</p>
                 </div>
                 <form onSubmit={(e) => {
                   e.preventDefault();
@@ -305,7 +306,6 @@ export default function FullQuizletApp() {
               </div>
             )}
 
-            {/* --- QUIZ MODE --- */}
             {mode === 'quiz' && (
               <div className="bg-white p-6 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-100 min-h-[500px] flex flex-col items-center justify-center">
                 {quizPool.length === 0 ? (
@@ -333,7 +333,7 @@ export default function FullQuizletApp() {
                     <div className="flex justify-between items-center mb-10">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Câu {currentQuizIndex + 1} / {quizPool.length}</span>
                         <div className="h-2 flex-1 mx-4 bg-slate-100 rounded-full overflow-hidden">
-                           <div className="h-full bg-[#4255FF] transition-all" style={{width: `${(currentQuizIndex / quizPool.length) * 100}%`}}></div>
+                            <div className="h-full bg-[#4255FF] transition-all" style={{width: `${(currentQuizIndex / quizPool.length) * 100}%`}}></div>
                         </div>
                         <span className="text-[10px] font-black text-[#4255FF] uppercase tracking-widest">Score: {quizScore}</span>
                     </div>
@@ -358,30 +358,21 @@ export default function FullQuizletApp() {
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="text-7xl mb-6">🏆</div>
-                    <h2 className="text-3xl font-black mb-2">Kết quả</h2>
-                    <p className="text-slate-400 font-bold mb-8 italic">Bạn trả lời đúng {quizScore} trên {quizPool.length} câu</p>
-                    <button onClick={() => setQuizPool([])} className="px-12 py-5 bg-[#4255FF] text-white font-black rounded-2xl shadow-xl shadow-blue-200">Thử lại bài khác</button>
+                    <h2 className="text-3xl font-black mb-2">Kết quả: {quizScore} / {quizPool.length}</h2>
+                    <button onClick={() => setQuizPool([])} className="px-12 py-5 bg-[#4255FF] text-white font-black rounded-2xl shadow-xl">Thử lại</button>
                   </div>
                 )}
               </div>
             )}
 
-            {/* --- GAME MODE --- */}
             {mode === 'game' && (
               <div className="bg-white p-6 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-100 min-h-[500px] flex flex-col justify-center items-center">
                 {!gameActive ? (
-                  <div className="text-center">
-                    <div className="text-6xl mb-6">🧩</div>
-                    <h3 className="text-2xl font-black mb-2 uppercase tracking-tighter">Ghép cặp tốc độ</h3>
-                    <p className="text-slate-400 mb-8 text-sm font-medium">Nối Chữ Hán với Nghĩa đúng nhanh nhất có thể.</p>
-                    <button onClick={startMatchGame} className="px-12 py-5 bg-slate-800 text-white font-black rounded-2xl shadow-xl active:scale-95 transition-transform">Chơi ngay</button>
-                  </div>
+                  <button onClick={startMatchGame} className="px-12 py-5 bg-slate-800 text-white font-black rounded-2xl shadow-xl">Chơi ngay</button>
                 ) : (
                   <div className="w-full max-w-3xl">
                     <div className="flex justify-between items-center mb-8">
                       <span className="font-black text-[#4255FF] text-xl">⏱ {gameTime}s</span>
-                      <button onClick={() => setGameActive(false)} className="text-[10px] font-black uppercase text-rose-400">Dừng chơi</button>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       {gameCards.map((c, idx) => (
@@ -396,77 +387,86 @@ export default function FullQuizletApp() {
               </div>
             )}
 
-            {/* --- EDIT MODE --- */}
             {mode === 'edit' && (
               <div className="space-y-8 animate-in pb-20">
                 <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                     <div>
                         <h3 className="text-2xl font-black text-slate-800">Chỉnh sửa nội dung</h3>
-                        <p className="text-[#4255FF] font-black text-[10px] uppercase tracking-widest mt-1">Đang xem: {currentFolder?.name}</p>
+                        <p className="text-[#4255FF] font-black text-[10px] uppercase tracking-widest mt-1">Bộ: {currentFolder?.name}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <button onClick={exportToTxt} className="text-[9px] font-black px-4 py-3 bg-blue-50 text-[#4255FF] rounded-xl uppercase">Xuất File .TXT</button>
-                      <button onClick={() => fileInputRef.current.click()} className="text-[9px] font-black px-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl uppercase">Nhập từ Máy tính</button>
-                      <button onClick={() => setShowImport(!showImport)} className="text-[9px] font-black px-4 py-3 bg-slate-100 text-slate-600 rounded-xl uppercase">Nhập nhanh</button>
+                      <button onClick={handleClearAllCards} className="text-[9px] font-black px-4 py-3 bg-rose-50 text-rose-500 rounded-xl uppercase border border-rose-100 transition-all active:scale-95">🗑️ Xóa sạch thẻ</button>
+                      <button onClick={exportToTxt} className="text-[9px] font-black px-4 py-3 bg-blue-50 text-[#4255FF] rounded-xl uppercase border border-blue-100">📤 Xuất File</button>
+                      <button onClick={() => fileInputRef.current.click()} className="text-[9px] font-black px-4 py-3 bg-emerald-50 text-emerald-600 rounded-xl uppercase border border-emerald-100">📁 Chọn File</button>
+                      <button onClick={() => setShowImport(!showImport)} className="text-[9px] font-black px-4 py-3 bg-slate-100 text-slate-600 rounded-xl uppercase">📝 Nhập nhanh</button>
                       <input type="file" ref={fileInputRef} onChange={(e) => {
                         const file = e.target.files[0];
                         if(!file) return;
                         const reader = new FileReader();
                         reader.onload = (event) => {
                           const lines = event.target.result.split("\n").filter(l => l.trim());
-                          const newC = lines.map(l => {
+                          const newC = [];
+                          lines.forEach(l => {
                             const p = l.split(/[|]|,/);
-                            return (p[0] && p[1]) ? { id: Date.now()+Math.random(), term: p[0].trim(), definition: p[1].trim(), folderId: activeFolderId } : null;
-                          }).filter(Boolean);
-                          setCards([...cards, ...newC]);
+                            const t = p[0]?.trim(); const d = p[1]?.trim();
+                            if (t && d && !isDuplicate(t)) {
+                              newC.push({ id: Date.now()+Math.random(), term: t, definition: d, folderId: activeFolderId });
+                            }
+                          });
+                          if(newC.length > 0) setCards([...cards, ...newC]);
                         };
                         reader.readAsText(file);
-                      }} className="hidden" />
+                        e.target.value = null; // reset
+                      }} className="hidden" accept=".txt,.csv" />
                     </div>
                   </div>
                   
                   {showImport ? (
                     <div className="space-y-4 mb-10 bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-slate-200">
-                      <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder="Định dạng: Từ | Nghĩa (Mỗi dòng 1 từ)&#10;Ví dụ:&#10;先生 | Giáo viên&#10;学生 | Học sinh" className="w-full h-40 p-5 bg-white rounded-2xl outline-none font-bold text-sm border-2 border-slate-100 focus:border-[#4255FF]" />
+                      <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder="Định dạng: Từ | Nghĩa" className="w-full h-40 p-5 bg-white rounded-2xl outline-none font-bold text-sm border-2 border-slate-100 focus:border-[#4255FF]" />
                       <div className="flex gap-2">
-                        <button onClick={() => setShowImport(false)} className="flex-1 py-4 font-black text-slate-400">Hủy bỏ</button>
+                        <button onClick={() => setShowImport(false)} className="flex-1 py-4 font-black text-slate-400">Hủy</button>
                         <button onClick={() => {
                             const lines = importText.split("\n").filter(l => l.trim());
-                            const newImported = lines.map(l => {
+                            const newImported = [];
+                            lines.forEach(l => {
                                 const p = l.split(/[|]|,/);
-                                return (p[0] && p[1]) ? { id: Date.now()+Math.random(), term: p[0].trim(), definition: p[1].trim(), folderId: activeFolderId } : null;
-                            }).filter(Boolean);
+                                const t = p[0]?.trim(); const d = p[1]?.trim();
+                                if (t && d && !isDuplicate(t)) {
+                                  newImported.push({ id: Date.now()+Math.random(), term: t, definition: d, folderId: activeFolderId });
+                                }
+                            });
                             setCards([...cards, ...newImported]); setImportText(""); setShowImport(false);
-                        }} className="flex-[2] py-4 bg-[#4255FF] text-white font-black rounded-2xl shadow-lg">Lưu danh sách</button>
+                        }} className="flex-[2] py-4 bg-[#4255FF] text-white font-black rounded-2xl shadow-lg">Lưu (Bỏ qua trùng)</button>
                       </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                      <input value={inputTerm} onChange={e => setInputTerm(e.target.value)} placeholder="Hán tự..." className="md:col-span-2 p-5 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-[#4255FF] transition-all text-sm" />
-                      <input value={inputDef} onChange={e => setInputDef(e.target.value)} placeholder="Nghĩa..." className="md:col-span-2 p-5 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-[#4255FF] transition-all text-sm" />
+                      <input value={inputTerm} onChange={e => setInputTerm(e.target.value)} placeholder="Từ..." className="md:col-span-2 p-5 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-[#4255FF] text-sm" />
+                      <input value={inputDef} onChange={e => setInputDef(e.target.value)} placeholder="Nghĩa..." className="md:col-span-2 p-5 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-[#4255FF] text-sm" />
                       <button onClick={() => {
                           if(!inputTerm || !inputDef) return; 
+                          if(isDuplicate(inputTerm)) return alert("Từ vựng này đã có trong bộ thẻ!");
                           setCards([...cards, { id: Date.now(), term: inputTerm, definition: inputDef, folderId: activeFolderId }]); 
                           setInputTerm(""); setInputDef("");
-                      }} className="bg-[#4255FF] text-white font-black rounded-2xl py-5 active:scale-95 shadow-lg shadow-blue-100">Thêm</button>
+                      }} className="bg-[#4255FF] text-white font-black rounded-2xl py-5 active:scale-95 shadow-lg shadow-blue-100 transition-all">Thêm</button>
                     </div>
                   )}
                 </div>
 
                 <div className="relative group">
-                  <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Tìm kiếm trong bộ này..." className="w-full p-5 pl-14 bg-white rounded-[2rem] border-2 border-slate-100 outline-none font-bold text-sm shadow-sm focus:border-[#4255FF] transition-all" />
+                  <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Tìm kiếm..." className="w-full p-5 pl-14 bg-white rounded-[2rem] border-2 border-slate-100 outline-none font-bold text-sm shadow-sm focus:border-[#4255FF]" />
                   <span className="absolute left-6 top-5 opacity-30 group-focus-within:opacity-100 transition-opacity">🔍</span>
                 </div>
 
                 <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-100 overflow-hidden">
-                  <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead>
                           <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                               <th className="px-8 py-4">Từ vựng</th>
                               <th className="px-8 py-4">Định nghĩa</th>
-                              <th className="px-8 py-4 text-right">Xóa</th>
+                              <th className="px-8 py-4 text-right">Thao tác</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
@@ -481,23 +481,21 @@ export default function FullQuizletApp() {
                         ))}
                       </tbody>
                     </table>
-                  </div>
                 </div>
 
                 <button onClick={() => {
-                    if(window.confirm(`Bạn có chắc muốn XÓA VĨNH VIỄN bộ ["${currentFolder?.name}"]?`)) {
+                    if(window.confirm(`XÓA VĨNH VIỄN cả thư mục ["${currentFolder?.name}"]?`)) {
                         setFolders(folders.filter(f => f.id !== activeFolderId));
                         setCards(cards.filter(c => c.folderId !== activeFolderId));
                         setActiveFolderId(null);
                     }
-                }} className="w-full py-6 text-rose-400 font-black text-[10px] uppercase tracking-[0.4em] hover:text-rose-600">Xóa toàn bộ thư mục</button>
+                }} className="w-full py-6 text-rose-400 font-black text-[10px] uppercase tracking-[0.4em] hover:text-rose-600 transition-colors">Xóa toàn bộ thư mục</button>
               </div>
             )}
           </div>
         )}
       </main>
 
-      {/* --- CSS TÙY CHỈNH --- */}
       <style jsx global>{`
         .perspective { perspective: 2000px; }
         .transform-style-3d { transform-style: preserve-3d; }
