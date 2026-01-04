@@ -140,8 +140,8 @@ export default function FullQuizletApp() {
     return (
       <div className="min-h-screen bg-[#F6F7FB] p-6 md:p-16 font-sans">
         <header className="max-w-6xl mx-auto mb-12">
-          <h1 className="text-5xl font-black text-slate-800 tracking-tighter mb-2 italic">KANJI <span className="text-[#4255FF] not-italic">GIALAM</span></h1>
-          <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">^^ranh se update</p>
+          <h1 className="text-5xl font-black text-slate-800 tracking-tighter mb-2 italic">KANJI <span className="text-[#4255FF] not-italic">RENSHUU</span></h1>
+          <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Made by Gialam</p>
         </header>
 
         <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
