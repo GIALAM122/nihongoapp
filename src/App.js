@@ -282,29 +282,61 @@ export default function FullQuizletApp() {
               </div>
             )}
 
-            {mode === 'write' && (
-              <div className="max-w-2xl mx-auto bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
-                <div className="text-center mb-10">
-                  <h3 className="text-8xl font-black text-slate-800 mb-6">{folderCards[currentIndex].term}</h3>
-                </div>
-                <form onSubmit={(e) => {
-                  e.preventDefault();
-                  if (writeInput.trim().toLowerCase() === folderCards[currentIndex].definition.toLowerCase()) {
-                    setWriteFeedback({ isCorrect: true, msg: "Tuyệt vời! ✨" });
-                    speakJP(folderCards[currentIndex].term);
-                    setTimeout(() => { setWriteInput(""); setWriteFeedback(null); nextCard(); }, 800);
-                  } else {
-                    setWriteFeedback({ isCorrect: false, msg: `Sai rồi! Đáp án: ${folderCards[currentIndex].definition}` });
-                  }
-                }} className="space-y-6">
-                  <input autoFocus value={writeInput} onChange={e => setWriteInput(e.target.value)} 
-                    className={`w-full p-6 text-center text-2xl font-black rounded-3xl border-4 outline-none transition-all ${writeFeedback ? (writeFeedback.isCorrect ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-rose-500 bg-rose-50 text-rose-700') : 'border-slate-50 focus:border-[#4255FF]'}`} 
-                    placeholder="Gõ tại đây..." />
-                  {writeFeedback && <p className={`text-center font-black text-sm animate-bounce ${writeFeedback.isCorrect ? 'text-emerald-500' : 'text-rose-500'}`}>{writeFeedback.msg}</p>}
-                  <button type="submit" className="w-full py-5 bg-slate-800 text-white font-black rounded-2xl shadow-xl active:scale-95 transition-transform">Xác nhận</button>
-                </form>
-              </div>
-            )}
+         {mode === 'write' && (
+  <div className="max-w-2xl mx-auto bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
+    <div className="text-center mb-10">
+      {/* Hiển thị Kanji để người dùng nhìn và gõ Hiragana xuống dưới */}
+      <h3 className="text-8xl font-black text-slate-800 mb-6">{folderCards[currentIndex].term}</h3>
+      <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Gõ lại cách đọc hoặc ý nghĩa</p>
+    </div>
+    
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      
+      // Chuẩn hóa chuỗi: bỏ khoảng trắng, chuyển về chữ thường
+      const userAns = writeInput.trim().toLowerCase();
+      const correctAns = folderCards[currentIndex].definition.trim().toLowerCase();
+      
+      // Logic kiểm tra: Nếu gõ đúng Hiragana (đang lưu ở definition) là OK
+      if (userAns === correctAns) {
+        setWriteFeedback({ isCorrect: true, msg: "正解！ Tuyệt vời! ✨" });
+        speakJP(folderCards[currentIndex].term);
+        setTimeout(() => { 
+          setWriteInput(""); 
+          setWriteFeedback(null); 
+          nextCard(); 
+        }, 800);
+      } else {
+        setWriteFeedback({ 
+          isCorrect: false, 
+          msg: `Chưa đúng! Đáp án là: ${folderCards[currentIndex].definition}` 
+        });
+      }
+    }} className="space-y-6">
+      <input 
+        autoFocus 
+        value={writeInput} 
+        onChange={e => setWriteInput(e.target.value)} 
+        className={`w-full p-6 text-center text-2xl font-black rounded-3xl border-4 outline-none transition-all ${
+          writeFeedback 
+            ? (writeFeedback.isCorrect ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-rose-500 bg-rose-50 text-rose-700') 
+            : 'border-slate-50 focus:border-[#4255FF]'
+        }`} 
+        placeholder="Gõ Hiragana/Nghĩa tại đây..." 
+      />
+      {writeFeedback && (
+        <p className={`text-center font-black text-sm animate-bounce ${
+          writeFeedback.isCorrect ? 'text-emerald-500' : 'text-rose-500'
+        }`}>
+          {writeFeedback.msg}
+        </p>
+      )}
+      <button type="submit" className="w-full py-5 bg-slate-800 text-white font-black rounded-2xl shadow-xl active:scale-95 transition-transform">
+        Kiểm tra
+      </button>
+    </form>
+  </div>
+)}
 
             {mode === 'quiz' && (
               <div className="bg-white p-6 md:p-12 rounded-[2.5rem] shadow-sm border border-slate-100 min-h-[500px] flex flex-col items-center justify-center">
